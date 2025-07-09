@@ -101,6 +101,11 @@
             Ana Menü
         </button>
 
+        <!-- Kullanıcı ID gösterimi -->
+        <div id="user-id-display" class="absolute top-4 right-4 text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-md shadow-sm">
+            Kullanıcı ID: Yükleniyor...
+        </div>
+
         <h1 class="text-4xl font-bold text-gray-800 mb-4 text-center">İtalyanca-Türkçe Kelime Oyunu</h1>
 
         <!-- Ana Menü / Mod Seçimi -->
@@ -164,16 +169,19 @@
                 <button id="add-word-button" class="button-primary w-full py-3 text-white font-bold rounded-lg">Kelime Ekle</button>
             </div>
 
-            <!-- Google Drive'dan Kelime Aktar -->
+            <!-- Excel Dosyasından Kelime Aktar -->
             <div class="bg-yellow-50 p-6 rounded-lg w-full max-w-md shadow-md mt-6">
-                <h3 class="text-2xl font-semibold text-gray-700 mb-4">Google Drive'dan Excel Tablosu Aktar</h3>
+                <h3 class="text-2xl font-semibold text-gray-700 mb-4">Excel Dosyasından Kelime Aktar</h3>
                 <p class="text-sm text-gray-600 mb-3">
-                    Lütfen Google Drive'ınızdaki Excel dosyasının (ilk satırda 'İtalyanca' ve 'Türkçe' sütun başlıkları olmalı) **herkese açık paylaşım linkini** buraya yapıştırın.
-                    <br><span class="font-bold text-red-600">ÖNEMLİ:</span> Bu özelliği yerel olarak kullanmak için HTML dosyasını bir web sunucusu (örn. Python'ın `http.server` veya VS Code Live Server) üzerinden çalıştırmalısınız. Doğrudan `file://` ile açmak **çalışmayacaktır**. Ayrıca Drive dosyanızın "Bağlantıya sahip olan herkes" ile "Görüntüleyici" olarak paylaşıldığından emin olun.
+                    Lütfen bilgisayarınızdan Excel dosyasını (.xlsx) seçin. Dosyanızın ilk satırında 'İtalyanca' ve 'Türkçe' sütun başlıkları olmalıdır.
                 </p>
-                <input type="text" id="drive-link-input" placeholder="Google Drive Excel Paylaşım Linki" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:shadow-outline focus:border-yellow-500">
-                <button id="import-drive-button" class="button-primary w-full py-3 text-white font-bold rounded-lg opacity-50 cursor-not-allowed" disabled>Drive'dan Aktar</button>
-                <p id="drive-import-status" class="text-sm mt-3 text-center"></p>
+                <label for="excel-file-input" class="custom-file-upload w-full text-center text-gray-700 font-medium">
+                    Dosya Seç...
+                </label>
+                <input type="file" id="excel-file-input" accept=".xlsx">
+                <p id="file-name-display" class="text-sm text-gray-500 mt-2"></p>
+                <button id="upload-excel-button" class="button-primary w-full py-3 text-white font-bold rounded-lg opacity-50 cursor-not-allowed" disabled>Excel'den Aktar</button>
+                <p id="excel-import-status" class="text-sm mt-3 text-center"></p>
             </div>
 
             <!-- Mevcut Kelimeler -->
@@ -245,8 +253,24 @@
     </div>
 
     <script type="module">
-        // Firebase ile ilgili tüm importlar kaldırıldı.
-        // Artık kelimeler sadece tarayıcı belleğinde tutulacak.
+        // Firebase Modülleri
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js"; // SDK sürümü güncellendi
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js"; // Analytics eklendi
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"; // SDK sürümü güncellendi
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js"; // SDK sürümü güncellendi
+
+        // KENDİ FIREBASE YAPILANDIRMANIZ BURADA
+ const firebaseConfig = {
+    apiKey: "AIzaSyBX99YL08HxGPqywBBuELGeSFaQ7aqHsdE",
+    authDomain: "italyanca-sozluk.firebaseapp.com",
+    projectId: "italyanca-sozluk",
+    storageBucket: "italyanca-sozluk.firebasestorage.app",
+    messagingSenderId: "773584885746",
+    appId: "1:773584885746:web:7bfaf9c406bb72a38a3d6b",
+    measurementId: "G-K9J3K1HNQ4"
+  };
+        // Kendi Firebase yapılandırmanız yukarıdaki gibi buraya yapıştırıldı.
+
 
         let allWords = []; // Tüm kelimeler burada saklanacak: [{id: "...", italian: "...", turkish: "..."}, ...]
         let wordsToGuess = []; // Mevcut oyunda sorulacak kelimeler
@@ -258,13 +282,14 @@
         let currentEditingDocId = null; // Düzenlenmekte olan kelimenin ID'si
         let confirmActionCallback = null; // Onay modalı için callback fonksiyonu
 
-        // Otomatik yüklenecek Google Drive Excel linki (doğrudan export formatı tercih edilir)
-        // Bu linkin Google Drive'da "Bağlantıya sahip olan herkes" ile "Görüntüleyici" olarak paylaşıldığından emin olun.
-        const DEFAULT_DRIVE_LINK = "https://docs.google.com/spreadsheets/d/17W0tgLOeFQORTPoUXo1kHzl4NS0H8ID8/export?format=xlsx";
+        // Firebase değişkenleri
+        let db;
+        let auth;
+        let userId;
+        let wordsCollectionRef;
+        let currentAppId; // Kendi Firebase projenizin projectId'si olacak
 
         // --- Modallar için Yardımcı Fonksiyonlar ---
-        // Bu fonksiyonlar HTML'deki onclick olaylarından çağrıldığı için global erişilebilir olmalıdır.
-        // window objesine atanarak global erişim sağlanır.
         window.showModal = function(modalId) {
             document.getElementById(modalId).style.display = 'flex';
         }
@@ -297,9 +322,8 @@
         const manageWordsSection = document.getElementById('manage-words-section');
         const backToMainFromGameSetup = document.getElementById('back-to-main-from-game-setup');
         const backToMainFromManage = document.getElementById('back-to-main-from-manage');
-
-        // Yeni eklenen "Her zaman Ana Menüye Dön" butonu
         const backToMainAlwaysButton = document.getElementById('back-to-main-always');
+        const userIdDisplay = document.getElementById('user-id-display');
 
 
         const numWordsInput = document.getElementById('num-words-input');
@@ -326,9 +350,12 @@
         const wordsTableBody = document.getElementById('words-table-body');
         const totalWordCountSpan = document.getElementById('total-word-count');
 
-        const driveLinkInput = document.getElementById('drive-link-input');
-        const importDriveButton = document.getElementById('import-drive-button');
-        const driveImportStatus = document.getElementById('drive-import-status');
+        // Excel Dosyası yükleme elementleri
+        const excelFileInput = document.getElementById('excel-file-input');
+        const fileNameDisplay = document.getElementById('file-name-display');
+        const uploadExcelButton = document.getElementById('upload-excel-button');
+        const excelImportStatus = document.getElementById('excel-import-status');
+
 
         const editWordModal = document.getElementById('edit-word-modal');
         const editItalianWordInput = document.getElementById('edit-italian-word');
@@ -381,6 +408,10 @@
             gameSetupSection.classList.add('hidden');
             gameSection.classList.add('hidden');
             manageWordsSection.classList.add('hidden');
+            window.closeModal('result-modal'); // Açık olan sonuç modalını kapat
+            window.closeModal('error-modal');   // Açık olan hata modalını kapat
+            window.closeModal('edit-word-modal'); // Açık olan düzenleme modalını kapat
+            window.closeModal('confirm-modal'); // Açık olan onay modalını kapat
 
             // Ana menüyü göster
             mainMenu.classList.remove('hidden');
@@ -420,7 +451,7 @@
                     wordCountError.textContent = `En az ${requestedCount} kelimeye ihtiyacınız var. Yüklü: ${allWords.length}`;
                     wordCountError.classList.remove('hidden');
                 } else if (allWords.length === 0) {
-                     wordCountError.textContent = "Bellekte kelime bulunamadı. Lütfen önce kelime ekleyin veya Drive'dan aktarın.";
+                     wordCountError.textContent = "Bellekte kelime bulunamadı. Lütfen önce kelime ekleyin veya Excel'den aktarın.";
                      wordCountError.classList.remove('hidden');
                 }
             }
@@ -471,7 +502,7 @@
                 gameSetupSection.classList.remove('hidden');
                 return;
             }
-            const shuffledWords = [...allWords].sort(() => 0.5 - Math.random());
+            const shuffledWords = [...allWords].sort(() => 0.5 - Math.random()); // Kelimeleri karıştır
             wordsToGuess = shuffledWords.slice(0, gameWordCount);
 
             displayCurrentWord();
@@ -605,7 +636,7 @@
             window.showModal('result-modal');
         }
 
-        // --- Kelime Yönetimi İşlemleri (Bellek Tabanlı) ---
+        // --- Kelime Yönetimi İşlemleri (Firebase Destekli) ---
 
         // Kelime zaten mevcut mu kontrol eder (büyük/küçük harf duyarsız)
         function isWordDuplicate(italian, turkish) {
@@ -616,7 +647,7 @@
         }
 
         // Yeni kelime ekler
-        addWordButton.addEventListener('click', () => {
+        addWordButton.addEventListener('click', async () => {
             const italian = addItalianWordInput.value.trim();
             const turkish = addTurkishWordInput.value.trim();
 
@@ -630,19 +661,21 @@
                 return;
             }
 
-            // Yeni kelimeye benzersiz bir ID atıyoruz (şimdilik basit bir timestamp)
-            const newWord = {
-                id: Date.now().toString(), // Basit bir ID oluşturma
-                italian: italian,
-                turkish: turkish,
-                timestamp: new Date()
-            };
-            allWords.push(newWord);
-            renderWordsTable(); // Tabloyu güncelle
-            updateStartButtonState(); // Oyun başlatma butonunu güncelle
-            addItalianWordInput.value = '';
-            addTurkishWordInput.value = '';
-            console.log("Kelime başarıyla eklendi (belleğe)!");
+            try {
+                // Firebase'e yeni kelime ekle
+                await addDoc(wordsCollectionRef, {
+                    italian: italian,
+                    turkish: turkish,
+                    timestamp: new Date() // Eklenme zamanı
+                });
+                addItalianWordInput.value = '';
+                addTurkishWordInput.value = '';
+                console.log("Kelime başarıyla eklendi (Firebase'e)!");
+                // onSnapshot sayesinde tablo otomatik güncellenecek
+            } catch (e) {
+                console.error("Kelime eklenirken hata oluştu: ", e);
+                displayError("Kelime eklenirken bir hata oluştu: " + e.message);
+            }
         });
 
         // Kelime listesini tabloya render eder
@@ -651,7 +684,7 @@
             totalWordCountSpan.textContent = allWords.length;
 
             if (allWords.length === 0) {
-                wordsTableBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500">Henüz kelime yok. Yeni kelimeler ekleyin veya Drive\'dan aktarın!</td></tr>';
+                wordsTableBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500">Henüz kelime yok. Yeni kelimeler ekleyin veya Excel\'den aktarın!</td></tr>';
                 return;
             }
 
@@ -679,9 +712,9 @@
                 const deleteButton = document.createElement('button');
                 deleteButton.textContent = 'Sil';
                 deleteButton.className = 'text-red-600 hover:text-red-900';
-                deleteButton.onclick = () => showConfirmModal(`"${word.italian}" kelimesini silmek istediğinizden emin misiniz?`, (confirmed) => {
+                deleteButton.onclick = () => showConfirmModal(`"${word.italian}" kelimesini silmek istediğinizden emin misiniz?`, async (confirmed) => {
                     if (confirmed) {
-                        deleteWord(word.id);
+                        await deleteWord(word.id);
                     }
                 });
                 actionsCell.appendChild(deleteButton);
@@ -697,7 +730,7 @@
         }
 
         // Kelimeyi günceller (düzenleme modalından)
-        saveEditButton.addEventListener('click', () => {
+        saveEditButton.addEventListener('click', async () => {
             const italian = editItalianWordInput.value.trim();
             const turkish = editTurkishWordInput.value.trim();
 
@@ -719,209 +752,241 @@
                 }
             }
 
-
-            // allWords dizisindeki kelimeyi bul ve güncelle
-            const wordIndex = allWords.findIndex(word => word.id === currentEditingDocId);
-            if (wordIndex > -1) {
-                allWords[wordIndex].italian = italian;
-                allWords[wordIndex].turkish = turkish;
-                renderWordsTable(); // Tabloyu güncelle
-                updateStartButtonState(); // Oyun başlatma butonunu güncelle
-                console.log("Kelime başarıyla güncellendi (bellekte)!");
+            try {
+                // Firebase'deki belgeyi güncelle
+                const wordDocRef = doc(db, `users/${userId}/words`, currentEditingDocId); // Koleksiyon yolu güncellendi
+                await updateDoc(wordDocRef, {
+                    italian: italian,
+                    turkish: turkish
+                });
+                console.log("Kelime başarıyla güncellendi (Firebase'de)!");
                 window.closeModal('edit-word-modal');
-            } else {
-                displayError("Kelime bulunamadı veya güncellenemedi.");
+                // onSnapshot sayesinde tablo otomatik güncellenecek
+            } catch (e) {
+                console.error("Kelime güncellenirken hata oluştu: ", e);
+                displayError("Kelime güncellenirken bir hata oluştu: " + e.message);
             }
         });
 
         // Kelimeyi siler
-        function deleteWord(id) {
-            allWords = allWords.filter(word => word.id !== id);
-            renderWordsTable(); // Tabloyu güncelle
-            updateStartButtonState(); // Oyun başlatma butonunu güncelle
-            console.log("Kelime başarıyla silindi (bellekten)!");
+        async function deleteWord(id) {
+            try {
+                // Firebase'deki belgeyi sil
+                const wordDocRef = doc(db, `users/${userId}/words`, id); // Koleksiyon yolu güncellendi
+                await deleteDoc(wordDocRef);
+                console.log("Kelime başarıyla silindi (Firebase'den)!");
+                // onSnapshot sayesinde tablo otomatik güncellenecek
+            } catch (e) {
+                console.error("Kelime silinirken hata oluştu: ", e);
+                displayError("Kelime silinirken bir hata oluştu: " + e.message);
+            }
         }
 
-        // --- Google Drive'dan Kelime Aktarma ---
-        driveLinkInput.addEventListener('input', () => {
-            const link = driveLinkInput.value.trim();
-            if (link) {
-                importDriveButton.disabled = false;
-                importDriveButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        // --- Excel Dosyasından Kelime Aktarma (Firebase'e yazacak şekilde güncellendi) ---
+        excelFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                fileNameDisplay.textContent = `Seçilen Dosya: ${file.name}`;
+                uploadExcelButton.disabled = false;
+                uploadExcelButton.classList.remove('opacity-50', 'cursor-not-allowed');
             } else {
-                importDriveButton.disabled = true;
-                importDriveButton.classList.add('opacity-50', 'cursor-not-allowed');
+                fileNameDisplay.textContent = '';
+                uploadExcelButton.disabled = true;
+                uploadExcelButton.classList.add('opacity-50', 'cursor-not-allowed');
             }
-            driveImportStatus.textContent = ''; // Durum mesajını temizle
+            excelImportStatus.textContent = ''; // Durum mesajını temizle
         });
 
-        importDriveButton.addEventListener('click', async () => {
-            const link = driveLinkInput.value.trim();
-            if (!link) {
-                displayError("Lütfen bir Google Drive linki girin.");
+        uploadExcelButton.addEventListener('click', async () => {
+            const file = excelFileInput.files[0];
+            if (!file) {
+                displayError("Lütfen bir Excel dosyası seçin.");
                 return;
             }
-            await fetchExcelFromDriveLink(link, driveImportStatus); // Manuel aktarım için status elementini gönder
+            await handleFileUpload(file, excelImportStatus);
         });
 
-        function extractFileIdFromDriveLink(link) {
-            // Updated regex to support docs.google.com/spreadsheets/d/ links
-            const regex = /(?:https?:\/\/)?(?:www\.)?(?:drive\.google\.com\/(?:file\/d\/|open\?id=|folderview\?id=)|docs\.google\.com\/spreadsheets\/d\/)([a-zA-Z0-9_-]+)/;
-            const match = link.match(regex);
-            if (match && match[1]) {
-                return match[1];
+        async function handleFileUpload(file, statusElement) {
+            if (!wordsCollectionRef) {
+                displayError("Firebase henüz başlatılmadı veya kullanıcı oturum açmadı. Lütfen bekleyin.");
+                return;
             }
-            return null;
-        }
 
-        async function fetchExcelFromDriveLink(link, statusElement) {
             if (statusElement) {
                 statusElement.className = 'text-sm mt-3 text-gray-600';
-                statusElement.textContent = 'Drive linki işleniyor...';
+                statusElement.textContent = 'Excel dosyası okunuyor...';
             }
 
-            const fileId = extractFileIdFromDriveLink(link);
-            if (!fileId) {
-                const msg = "Geçersiz Google Drive linki. Lütfen dosya ID'sinin olduğu bir link girin. Google E-Tablolar için 'Dosya > Paylaş > Web'de Yayınla' seçeneğini kullanarak doğrudan indirme linki almayı deneyebilirsiniz.";
-                if (statusElement) {
-                    statusElement.className = 'text-sm mt-3 text-red-600';
-                    statusElement.textContent = msg;
-                } else {
-                    displayError(msg);
-                }
-                return;
-            }
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-            // Google Sheets için doğrudan indirme URL'si (export formatı)
-            const downloadUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=xlsx`;
-
-            try {
-                if (statusElement) {
-                    statusElement.textContent = 'Excel dosyası indiriliyor...';
-                }
-                const response = await fetch(downloadUrl);
-
-                if (!response.ok) {
-                    let errorMsg = `HTTP hata kodu: ${response.status}. Dosya bulunamadı veya erişim reddedildi.`;
-                    if (response.status === 403 || response.status === 401) {
-                         errorMsg += " Dosyanın Google Drive'da 'Bağlantıya sahip olan herkes' ile 'Görüntüleyici' olarak paylaşıldığından emin olun.";
-                    } else if (response.status === 0) { // Genellikle CORS hatası
-                        errorMsg += " Bu genellikle tarayıcının güvenlik kısıtlamalarından (CORS) kaynaklanır. Lütfen HTML dosyasını yerel bir web sunucusu (örn. Python'ın `http.server`) üzerinden çalıştırın.";
-                    }
-                    throw new Error(errorMsg);
-                }
-
-                const arrayBuffer = await response.arrayBuffer();
-                if (statusElement) {
-                    statusElement.textContent = 'Excel dosyası okunuyor ve kelimeler işleniyor...';
-                }
-
-                const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-
-                const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-                if (sheetData.length === 0) {
-                    const msg = "Drive Excel dosyasında okunabilir veri bulunamadı.";
-                    if (statusElement) {
-                        statusElement.className = 'text-sm mt-3 text-red-600';
-                        statusElement.textContent = msg;
-                    } else {
-                        displayError(msg);
-                    }
-                    return;
-                }
-
-                const headers = sheetData[0].map(h => String(h).replace(/\s+/g, '').toLowerCase());
-                const italianColIndex = headers.indexOf('italyanca');
-                const turkishColIndex = headers.indexOf('türkçe');
-
-                if (italianColIndex === -1 || turkishColIndex === -1) {
-                    const msg = "Drive Excel dosyasında 'İtalyanca' ve 'Türkçe' başlıklı sütunlar bulunamadı. Lütfen Excel dosyanızın ilk satırında bu başlıkların olduğundan emin olun.";
-                    if (statusElement) {
-                        statusElement.className = 'text-sm mt-3 text-red-600';
-                        statusElement.textContent = msg;
-                    } else {
-                        displayError(msg);
-                    }
-                    return;
-                }
-
-                const wordsToImport = [];
-                let duplicatesFound = 0;
-                for (let i = 1; i < sheetData.length; i++) {
-                    const row = sheetData[i];
-                    const italian = row[italianColIndex];
-                    const turkish = row[turkishColIndex];
-
-                    if (italian && turkish) {
-                        const trimmedItalian = String(italian).trim();
-                        const trimmedTurkish = String(turkish).trim();
-                        if (isWordDuplicate(trimmedItalian, trimmedTurkish)) {
-                            duplicatesFound++;
-                            console.warn(`Tekrarlayan kelime atlandı: ${trimmedItalian} - ${trimmedTurkish}`);
+                    if (sheetData.length === 0) {
+                        const msg = "Excel dosyasında okunabilir veri bulunamadı.";
+                        if (statusElement) {
+                            statusElement.className = 'text-sm mt-3 text-red-600';
+                            statusElement.textContent = msg;
                         } else {
-                            wordsToImport.push({
-                                id: Date.now().toString() + "_" + i, // Benzersiz ID oluştur
-                                italian: trimmedItalian,
-                                turkish: trimmedTurkish
-                            });
+                            displayError(msg);
+                        }
+                        return;
+                    }
+
+                    const headers = sheetData[0].map(h => String(h).replace(/\s+/g, '').toLowerCase());
+                    const italianColIndex = headers.indexOf('italyanca');
+                    const turkishColIndex = headers.indexOf('türkçe');
+
+                    if (italianColIndex === -1 || turkishColIndex === -1) {
+                        const msg = "Excel dosyasında 'İtalyanca' ve 'Türkçe' başlıklı sütunlar bulunamadı. Lütfen Excel dosyanızın ilk satırında bu başlıkların olduğundan emin olun.";
+                        if (statusElement) {
+                            statusElement.className = 'text-sm mt-3 text-red-600';
+                            statusElement.textContent = msg;
+                        } else {
+                            displayError(msg);
+                        }
+                        return;
+                    }
+
+                    const wordsToAdd = [];
+                    let duplicatesFound = 0;
+                    for (let i = 1; i < sheetData.length; i++) {
+                        const row = sheetData[i];
+                        const italian = row[italianColIndex];
+                        const turkish = row[turkishColIndex];
+
+                        if (italian && turkish) {
+                            const trimmedItalian = String(italian).trim();
+                            const trimmedTurkish = String(turkish).trim();
+                            if (isWordDuplicate(trimmedItalian, trimmedTurkish)) {
+                                duplicatesFound++;
+                                console.warn(`Tekrarlayan kelime atlandı: ${trimmedItalian} - ${trimmedTurkish}`);
+                            } else {
+                                wordsToAdd.push({
+                                    italian: trimmedItalian,
+                                    turkish: trimmedTurkish,
+                                    timestamp: new Date()
+                                });
+                            }
                         }
                     }
-                }
 
-                if (wordsToImport.length === 0 && duplicatesFound === sheetData.length - 1) { // Sadece başlık varsa veya hepsi tekrar ise
-                    const msg = "Drive Excel dosyasında eklenecek geçerli veya yeni kelime bulunamadı.";
+                    if (wordsToAdd.length === 0 && duplicatesFound === sheetData.length - 1) {
+                        const msg = "Excel dosyasında eklenecek geçerli veya yeni kelime bulunamadı.";
+                        if (statusElement) {
+                            statusElement.className = 'text-sm mt-3 text-orange-600';
+                            statusElement.textContent = msg;
+                        } else {
+                            displayError(msg);
+                        }
+                        return;
+                    }
+
+                    // Kelimeleri Firebase'e toplu olarak ekle
+                    let addedCount = 0;
+                    for (const word of wordsToAdd) {
+                        await addDoc(wordsCollectionRef, word);
+                        addedCount++;
+                    }
+
+                    let successMessage = `${addedCount} kelime başarıyla eklendi!`;
+                    if (duplicatesFound > 0) {
+                        successMessage += ` (${duplicatesFound} tekrar eden kelime atlandı.)`;
+                    }
+
                     if (statusElement) {
-                        statusElement.className = 'text-sm mt-3 text-orange-600';
+                        statusElement.className = 'text-sm mt-3 text-green-600';
+                        statusElement.textContent = successMessage;
+                    }
+
+                    excelFileInput.value = ''; // Dosya inputunu temizle
+                    fileNameDisplay.textContent = ''; // Dosya adını temizle
+                    uploadExcelButton.disabled = true;
+                    uploadExcelButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+                } catch (error) {
+                    console.error("Excel dosyası işlenirken hata:", error);
+                    const msg = "Excel dosyası işlenirken bir hata oluştu: " + error.message;
+                    if (statusElement) {
+                        statusElement.className = 'text-sm mt-3 text-red-600';
                         statusElement.textContent = msg;
                     } else {
                         displayError(msg);
                     }
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+
+        // --- Firebase Başlatma ve Veri Dinleme ---
+        async function initializeFirebaseAndLoadWords() {
+            try {
+                // Kendi Firebase yapılandırmanızı kullanın
+                if (!firebaseConfig || !firebaseConfig.apiKey) {
+                    console.error("Firebase yapılandırması eksik veya hatalı. Lütfen kendi firebaseConfig objenizi doğru bir şekilde yapıştırdığınızdan emin olun.");
+                    userIdDisplay.textContent = "Hata: Firebase yapılandırması yok.";
+                    displayError("Firebase yapılandırması eksik. Lütfen kodu kontrol edin.");
                     return;
                 }
 
-                allWords = allWords.concat(wordsToImport);
-                renderWordsTable();
-                updateStartButtonState();
+                console.log("Firebase Yapılandırması:", firebaseConfig); // Hata ayıklama için
 
-                let successMessage = `${wordsToImport.length} kelime başarıyla eklendi!`;
-                if (duplicatesFound > 0) {
-                    successMessage += ` (${duplicatesFound} tekrar eden kelime atlandı.)`;
-                }
+                currentAppId = firebaseConfig.projectId; // Kendi projenizin ID'sini kullanın
+                const app = initializeApp(firebaseConfig);
+                const analytics = getAnalytics(app); // Analytics başlatıldı
+                db = getFirestore(app);
+                auth = getAuth(app);
 
-                if (statusElement) {
-                    statusElement.className = 'text-sm mt-3 text-green-600';
-                    statusElement.textContent = successMessage;
-                }
+                // Anonim oturum açma işlemi
+                await signInAnonymously(auth);
 
-                driveLinkInput.value = '';
-                importDriveButton.disabled = true;
-                importDriveButton.classList.add('opacity-50', 'cursor-not-allowed');
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = `Kullanıcı ID: ${userId}`;
+                        // Firestore koleksiyon yolu: 'users/{userId}/words'
+                        // Güvenlik kurallarınızı buna göre ayarladığınızdan emin olun.
+                        wordsCollectionRef = collection(db, `users/${userId}/words`);
+
+                        // Firebase'den kelimeleri dinle
+                        onSnapshot(query(wordsCollectionRef), (snapshot) => {
+                            const wordsFromDb = [];
+                            snapshot.forEach((doc) => {
+                                wordsFromDb.push({ id: doc.id, ...doc.data() });
+                            });
+                            // Kelimeleri timestamp'e göre sırala (en yeniler en altta)
+                            allWords = wordsFromDb.sort((a, b) => (a.timestamp?.toDate() || 0) - (b.timestamp?.toDate() || 0));
+                            renderWordsTable();
+                            updateStartButtonState();
+                            console.log("Firebase'den kelimeler güncellendi:", allWords.length);
+                        }, (error) => {
+                            console.error("Firebase kelimeleri dinlenirken hata oluştu: ", error);
+                            displayError("Veritabanı bağlantısında hata: " + error.message);
+                        });
+
+                    } else {
+                        userIdDisplay.textContent = "Kullanıcı ID: Oturum Açılmadı";
+                        allWords = []; // Kullanıcı yoksa kelimeleri temizle
+                        renderWordsTable();
+                        updateStartButtonState();
+                    }
+                });
 
             } catch (error) {
-                console.error("Drive'dan Excel okunurken hata:", error);
-                const msg = "Drive'dan dosya alınırken bir hata oluştu: " + error.message;
-                if (statusElement) {
-                    statusElement.className = 'text-sm mt-3 text-red-600';
-                    statusElement.textContent = msg;
-                } else {
-                    displayError(msg);
-                }
+                console.error("Firebase başlatılırken veya oturum açılırken hata oluştu: ", error);
+                userIdDisplay.textContent = "Hata: Firebase bağlantısı kurulamadı.";
+                displayError("Uygulama başlatılırken bir hata oluştu: " + error.message);
             }
         }
 
-        // Sayfa yüklendiğinde başlangıç durumunu ayarla
+        // Sayfa yüklendiğinde Firebase'i başlat
         document.addEventListener('DOMContentLoaded', () => {
-            wordsTableBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500">Kelimeler yükleniyor...</td></tr>';
-            totalWordCountSpan.textContent = '0';
-            renderWordsTable();
-            updateStartButtonState();
-
-            // Sayfa yüklendiğinde varsayılan Drive linkinden kelimeleri çek
-            // Hata mesajını doğrudan ilgili alana göndermek için driveImportStatus elementini de gönderiyoruz.
-            fetchExcelFromDriveLink(DEFAULT_DRIVE_LINK, driveImportStatus);
+            initializeFirebaseAndLoadWords();
         });
     </script>
 </body>
