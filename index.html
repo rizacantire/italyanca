@@ -160,7 +160,7 @@
             <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-lg mt-6 w-full max-w-lg" role="alert">
                 <p class="font-bold">Önemli Bilgilendirme:</p>
                 <p class="text-sm">Uygulama verilerinizi kaydetmek için Firebase kullanır. Google ile giriş yaparak, kelimelerinize her yerden (farklı tarayıcılar veya cihazlar) erişebilirsiniz.</p>
-                <p class="text-sm mt-2">Excel'den kelime aktarırken, "Excel'den Aktar" butonuna bir kez basmanız yeterlidir. Program, dosyadaki tüm kelimeleri otomatik olarak tek tek veritabanına ekleyecektir.</p>
+                <p class="text-sm mt-2">Excel'den kelime aktarırken, "Excel'den Aktar" butonuna bir kez basmanız yeterlidir. Program, dosyadaki tüm kelimeleri otomatik olarak tek tek veritabanına ekleyecektir. İşlem durumu için aşağıdaki mesajları takip edin.</p>
             </div>
         </div>
 
@@ -306,7 +306,7 @@
         // Firebase Modülleri
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"; // GoogleAuthProvider, signInWithPopup eklendi
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
         import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
         // KENDİ FIREBASE YAPILANDIRMANIZ BURADA
@@ -367,7 +367,7 @@
 
         // UI Elementleri
         const mainMenu = document.getElementById('main-menu');
-        const googleSigninButton = document.getElementById('google-signin-button'); // Yeni Google Giriş butonu
+        const googleSigninButton = document.getElementById('google-signin-button');
         const startGameModeButton = document.getElementById('start-game-mode-button');
         const manageWordsModeButton = document.getElementById('manage-words-mode-button');
         const gameSetupSection = document.getElementById('game-setup-section');
@@ -375,9 +375,9 @@
         const backToMainFromGameSetup = document.getElementById('back-to-main-from-game-setup');
         const backToMainFromManage = document.getElementById('back-to-main-from-manage');
         const backToMainAlwaysButton = document.getElementById('back-to-main-always');
-        const userInfoDisplay = document.getElementById('user-info-display'); // Kullanıcı bilgisi div'i
-        const userDisplayText = document.getElementById('user-display-text'); // Kullanıcı e-postası/adı
-        const signOutButton = document.getElementById('sign-out-button'); // Çıkış yap butonu
+        const userInfoDisplay = document.getElementById('user-info-display');
+        const userDisplayText = document.getElementById('user-display-text');
+        const signOutButton = document.getElementById('sign-out-button');
 
         const numWordsInput = document.getElementById('num-words-input');
         const wordCountError = document.getElementById('word-count-error');
@@ -764,7 +764,7 @@
             totalWordCountSpan.textContent = allWords.length;
 
             if (allWords.length === 0) {
-                wordsTableBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500">Henüz kelime yok. Yeni kelimeler ekleyin veya Excel\'den aktarın!</td></tr>';
+                wordsTableBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500">Henüz kelime yok. Yeni kelimeler ekleyin!</td></tr>';
                 return;
             }
 
@@ -895,6 +895,8 @@
             if (statusElement) {
                 statusElement.className = 'text-sm mt-3 text-gray-600';
                 statusElement.textContent = 'Excel dosyası okunuyor...';
+                uploadExcelButton.disabled = true; // Butonu devre dışı bırak
+                uploadExcelButton.classList.add('opacity-50', 'cursor-not-allowed');
             }
 
             const reader = new FileReader();
@@ -985,7 +987,7 @@
 
                     excelFileInput.value = ''; // Dosya inputunu temizle
                     fileNameDisplay.textContent = ''; // Dosya adını temizle
-                    uploadExcelButton.disabled = true;
+                    uploadExcelButton.disabled = true; // Butonu tekrar devre dışı bırak (yeni dosya seçilene kadar)
                     uploadExcelButton.classList.add('opacity-50', 'cursor-not-allowed');
 
                 } catch (error) {
@@ -997,6 +999,10 @@
                     } else {
                         displayError(msg);
                     }
+                } finally {
+                    // İşlem bittiğinde butonu tekrar etkinleştir
+                    uploadExcelButton.disabled = false;
+                    uploadExcelButton.classList.remove('opacity-50', 'cursor-not-allowed');
                 }
             };
             reader.readAsArrayBuffer(file);
