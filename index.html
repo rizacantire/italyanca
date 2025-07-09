@@ -253,6 +253,10 @@
                     </table>
                 </div>
             </div>
+            <!-- Tüm Kelimeleri Sil Butonu -->
+            <button id="delete-all-words-button" class="bg-red-500 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg text-lg mt-6 shadow-md transition duration-200 ease-in-out">
+                Tüm Kelimeleri Sil
+            </button>
             <button id="back-to-main-from-manage" class="button-secondary px-6 py-2 text-gray-800 font-bold rounded-xl text-lg mt-4">Ana Menüye Dön</button>
         </div>
     </div>
@@ -307,7 +311,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, getDocs } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js"; // getDocs eklendi
 
         // KENDİ FIREBASE YAPILANDIRMANIZ BURADA
         const firebaseConfig = {
@@ -409,6 +413,8 @@
         const uploadExcelButton = document.getElementById('upload-excel-button');
         const excelImportStatus = document.getElementById('excel-import-status');
 
+        // Yeni "Tüm Kelimeleri Sil" butonu
+        const deleteAllWordsButton = document.getElementById('delete-all-words-button');
 
         const editWordModal = document.getElementById('edit-word-modal');
         const editItalianWordInput = document.getElementById('edit-italian-word');
@@ -934,7 +940,7 @@
                         return;
                     }
 
-                    const wordsToAdd = [];
+                    const wordsToProcess = [];
                     let duplicatesFound = 0;
                     for (let i = 1; i < sheetData.length; i++) {
                         const row = sheetData[i];
@@ -948,7 +954,7 @@
                                 duplicatesFound++;
                                 console.warn(`Tekrarlayan kelime atlandı: ${trimmedItalian} - ${trimmedTurkish}`);
                             } else {
-                                wordsToAdd.push({
+                                wordsToProcess.push({
                                     italian: trimmedItalian,
                                     turkish: trimmedTurkish,
                                     timestamp: new Date()
@@ -957,7 +963,7 @@
                         }
                     }
 
-                    if (wordsToAdd.length === 0 && duplicatesFound === sheetData.length - 1) {
+                    if (wordsToProcess.length === 0 && duplicatesFound === sheetData.length - 1) {
                         const msg = "Excel dosyasında eklenecek geçerli veya yeni kelime bulunamadı.";
                         if (statusElement) {
                             statusElement.className = 'text-sm mt-3 text-orange-600';
@@ -968,14 +974,20 @@
                         return;
                     }
 
-                    // Kelimeleri Firebase'e toplu olarak ekle
                     let addedCount = 0;
-                    for (const word of wordsToAdd) {
+                    const totalWords = wordsToProcess.length;
+
+                    // Kelimeleri Firebase'e toplu olarak ekle ve ilerlemeyi göster
+                    for (const word of wordsToProcess) {
                         await addDoc(wordsCollectionRef, word);
                         addedCount++;
+                        const progress = Math.floor((addedCount / totalWords) * 100);
+                        if (statusElement) {
+                            statusElement.textContent = `Kelimeler ekleniyor... %${progress}`;
+                        }
                     }
 
-                    let successMessage = `${addedCount} kelime başarıyla eklendi!`;
+                    let successMessage = `${addedCount} kelime başarıyla yüklendi!`;
                     if (duplicatesFound > 0) {
                         successMessage += ` (${duplicatesFound} tekrar eden kelime atlandı.)`;
                     }
@@ -987,8 +999,7 @@
 
                     excelFileInput.value = ''; // Dosya inputunu temizle
                     fileNameDisplay.textContent = ''; // Dosya adını temizle
-                    uploadExcelButton.disabled = true; // Butonu tekrar devre dışı bırak (yeni dosya seçilene kadar)
-                    uploadExcelButton.classList.add('opacity-50', 'cursor-not-allowed');
+                    // Butonun durumu finally bloğunda yönetiliyor
 
                 } catch (error) {
                     console.error("Excel dosyası işlenirken hata:", error);
@@ -1007,6 +1018,63 @@
             };
             reader.readAsArrayBuffer(file);
         }
+
+        // --- Tüm Kelimeleri Silme İşlevi ---
+        deleteAllWordsButton.addEventListener('click', async () => {
+            if (!userId) {
+                displayError("Kelimeleri silmek için giriş yapmış olmalısınız.");
+                return;
+            }
+
+            showConfirmModal("Tüm kelimelerinizi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!", async (firstConfirmed) => {
+                if (firstConfirmed) {
+                    showConfirmModal("Bu son onaydır. Tüm kelimeleriniz KALICI olarak silinecektir. Devam etmek için 'Evet'e tıklayın.", async (secondConfirmed) => {
+                        if (secondConfirmed) {
+                            try {
+                                const q = query(wordsCollectionRef);
+                                const snapshot = await getDocs(q);
+                                const batch = db.batch(); // Toplu silme işlemi için batch kullan
+
+                                if (snapshot.empty) {
+                                    displayError("Silinecek kelime bulunamadı.");
+                                    return;
+                                }
+
+                                let deletedCount = 0;
+                                const totalToDelete = snapshot.size;
+
+                                // UI'da silme durumunu göster
+                                excelImportStatus.className = 'text-sm mt-3 text-gray-600';
+                                excelImportStatus.textContent = `Tüm kelimeler siliniyor... %0`;
+                                deleteAllWordsButton.disabled = true;
+                                deleteAllWordsButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+                                for (const doc of snapshot.docs) {
+                                    batch.delete(doc.ref);
+                                    deletedCount++;
+                                    const progress = Math.floor((deletedCount / totalToDelete) * 100);
+                                    excelImportStatus.textContent = `Tüm kelimeler siliniyor... %${progress}`;
+                                }
+
+                                await batch.commit(); // Toplu işlemi tamamla
+
+                                excelImportStatus.className = 'text-sm mt-3 text-green-600';
+                                excelImportStatus.textContent = `Tüm ${deletedCount} kelime başarıyla silindi!`;
+                                console.log(`Tüm ${deletedCount} kelime başarıyla silindi.`);
+                                // onSnapshot dinleyicisi tabloyu otomatik güncelleyecektir.
+
+                            } catch (error) {
+                                console.error("Tüm kelimeler silinirken hata oluştu: ", error);
+                                displayError("Tüm kelimeler silinirken bir hata oluştu: " + error.message);
+                            } finally {
+                                deleteAllWordsButton.disabled = false;
+                                deleteAllWordsButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                            }
+                        }
+                    });
+                }
+            });
+        });
 
 
         // --- Firebase Başlatma ve Veri Dinleme ---
@@ -1078,10 +1146,6 @@
                         updateStartButtonState();
                     }
                 });
-
-                // Uygulama ilk yüklendiğinde, eğer kullanıcı zaten giriş yapmamışsa, otomatik olarak anonim giriş yapmayı deneme.
-                // Google ile giriş yapma butonunu göstererek kullanıcının tercihini bekle.
-                // Eğer kullanıcı daha önce Google ile giriş yaptıysa, onAuthStateChanged otomatik olarak algılayacaktır.
 
             } catch (error) {
                 console.error("Firebase başlatılırken veya oturum açılırken hata oluştu: ", error);
