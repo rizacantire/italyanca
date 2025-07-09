@@ -101,9 +101,10 @@
             Ana Menü
         </button>
 
-        <!-- Kullanıcı ID gösterimi -->
-        <div id="user-id-display" class="absolute top-4 right-4 text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-md shadow-sm">
-            Kullanıcı ID: Yükleniyor...
+        <!-- Kullanıcı ID gösterimi ve ID Sıfırlama Butonu -->
+        <div id="user-id-info" class="absolute top-4 right-4 text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-md shadow-sm flex items-center gap-2">
+            <span id="user-id-display">Kullanıcı ID: Yükleniyor...</span>
+            <button id="reset-user-id-button" class="ml-2 px-2 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 text-xs">ID'yi Sıfırla</button>
         </div>
 
         <h1 class="text-4xl font-bold text-gray-800 mb-4 text-center">İtalyanca-Türkçe Kelime Oyunu</h1>
@@ -112,6 +113,15 @@
         <div id="main-menu" class="w-full flex flex-col items-center justify-center gap-6 p-6">
             <button id="start-game-mode-button" class="button-primary px-10 py-5 text-white font-bold rounded-xl text-2xl w-full max-w-sm">Kelime Oyunu Oyna</button>
             <button id="manage-words-mode-button" class="button-secondary px-10 py-5 text-gray-800 font-bold rounded-xl text-2xl w-full max-w-sm">Kelimeleri Yönet</button>
+
+            <!-- Bilgilendirme Kutusu -->
+            <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded-lg mt-6 w-full max-w-lg" role="alert">
+                <p class="font-bold">Önemli Bilgilendirme:</p>
+                <p class="text-sm">Bu uygulama, verilerinizi kaydetmek için Firebase'in anonim kullanıcı özelliğini kullanır. Anonim kullanıcı kimliğiniz tarayıcınıza özgüdür.</p>
+                <p class="text-sm mt-1">Tarayıcı verilerinizi temizlerseniz, farklı bir tarayıcı veya gizli mod kullanırsanız, yeni bir kimlik oluşturulur ve önceki kelimelerinizi göremezsiniz.</p>
+                <p class="text-sm mt-2">Verilerinizin kalıcı olması ve cihazlar arası erişim için daha gelişmiş bir kimlik doğrulama yöntemi (örneğin, e-posta/şifre veya Google ile oturum açma) kullanılması gerekir.</p>
+                <p class="text-sm mt-2">Excel'den kelime aktarırken, "Excel'den Aktar" butonuna bir kez basmanız yeterlidir. Program, dosyadaki tüm kelimeleri otomatik olarak tek tek veritabanına ekleyecektir.</p>
+            </div>
         </div>
 
         <!-- Kelime Oyunu Alanı -->
@@ -254,21 +264,21 @@
 
     <script type="module">
         // Firebase Modülleri
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js"; // SDK sürümü güncellendi
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js"; // Analytics eklendi
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"; // SDK sürümü güncellendi
-        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js"; // SDK sürümü güncellendi
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-analytics.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js"; // signOut eklendi
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
         // KENDİ FIREBASE YAPILANDIRMANIZ BURADA
- const firebaseConfig = {
-    apiKey: "AIzaSyBX99YL08HxGPqywBBuELGeSFaQ7aqHsdE",
-    authDomain: "italyanca-sozluk.firebaseapp.com",
-    projectId: "italyanca-sozluk",
-    storageBucket: "italyanca-sozluk.firebasestorage.app",
-    messagingSenderId: "773584885746",
-    appId: "1:773584885746:web:7bfaf9c406bb72a38a3d6b",
-    measurementId: "G-K9J3K1HNQ4"
-  };
+        const firebaseConfig = {
+            apiKey: "AIzaSyBX99YL08HxGPqywBBuELGeSFaQ7aqHsdE",
+            authDomain: "italyanca-sozluk.firebaseapp.com",
+            projectId: "italyanca-sozluk",
+            storageBucket: "italyanca-sozluk.firebasestorage.app",
+            messagingSenderId: "773584885746",
+            appId: "1:773584885746:web:7bfaf9c406bb72a38a3d6b",
+            measurementId: "G-K9J3K1HNQ4"
+        };
         // Kendi Firebase yapılandırmanız yukarıdaki gibi buraya yapıştırıldı.
 
 
@@ -324,7 +334,7 @@
         const backToMainFromManage = document.getElementById('back-to-main-from-manage');
         const backToMainAlwaysButton = document.getElementById('back-to-main-always');
         const userIdDisplay = document.getElementById('user-id-display');
-
+        const resetUserIdButton = document.getElementById('reset-user-id-button'); // Yeni buton
 
         const numWordsInput = document.getElementById('num-words-input');
         const wordCountError = document.getElementById('word-count-error');
@@ -419,6 +429,25 @@
             // Oyun durumunu sıfırla
             resetGameInternal();
             incorrectlyGuessedWords = []; // Yanlış bilinen kelimeleri temizle
+        });
+
+        // --- Kullanıcı ID Sıfırlama Buton İşlevi ---
+        resetUserIdButton.addEventListener('click', async () => {
+            showConfirmModal("Mevcut kullanıcı kimliğinizi sıfırlamak ve yeni bir anonim kimlik oluşturmak istediğinizden emin misiniz? Bu işlem, mevcut tarayıcıdaki kaydedilmiş kelimelerinize erişiminizi kaybetmenize neden olabilir.", async (confirmed) => {
+                if (confirmed) {
+                    try {
+                        if (auth.currentUser) {
+                            await signOut(auth); // Mevcut oturumu kapat
+                            console.log("Mevcut anonim oturum kapatıldı.");
+                        }
+                        // Sayfayı yenileyerek Firebase'in yeni bir anonim oturum açmasını sağla
+                        location.reload();
+                    } catch (error) {
+                        console.error("Kullanıcı kimliği sıfırlanırken hata:", error);
+                        displayError("Kullanıcı kimliği sıfırlanırken bir hata oluştu: " + error.message);
+                    }
+                }
+            });
         });
 
 
@@ -754,7 +783,7 @@
 
             try {
                 // Firebase'deki belgeyi güncelle
-                const wordDocRef = doc(db, `users/${userId}/words`, currentEditingDocId); // Koleksiyon yolu güncellendi
+                const wordDocRef = doc(db, `users/${userId}/words`, currentEditingDocId);
                 await updateDoc(wordDocRef, {
                     italian: italian,
                     turkish: turkish
@@ -772,7 +801,7 @@
         async function deleteWord(id) {
             try {
                 // Firebase'deki belgeyi sil
-                const wordDocRef = doc(db, `users/${userId}/words`, id); // Koleksiyon yolu güncellendi
+                const wordDocRef = doc(db, `users/${userId}/words`, id);
                 await deleteDoc(wordDocRef);
                 console.log("Kelime başarıyla silindi (Firebase'den)!");
                 // onSnapshot sayesinde tablo otomatik güncellenecek
