@@ -1,12 +1,891 @@
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-<title>Page Title</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>İtalyanca-Türkçe Kelime Oyunu</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (xlsx) kütüphanesi CDN'den -->
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Açık gri arka plan */
+        }
+        .container {
+            max-width: 900px; /* Genişletilmiş konteyner */
+        }
+        input[type="file"] {
+            display: none; /* Dosya seçme butonunu gizle */
+        }
+        .custom-file-upload {
+            border: 2px dashed #93c5fd; /* Mavi dashed border */
+            padding: 1rem 2rem;
+            cursor: pointer;
+            border-radius: 0.75rem; /* rounded-lg */
+            transition: all 0.2s ease-in-out;
+        }
+        .custom-file-upload:hover {
+            background-color: #e0f2fe; /* Hafif mavi arka plan */
+            border-color: #60a5fa; /* Koyu mavi border */
+        }
+        /* Modal Stilleri */
+        .modal {
+            display: none; /* Varsayılan olarak gizli */
+            position: fixed; /* Ekranı kapla */
+            z-index: 1000; /* Diğer her şeyin üzerinde */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto; /* İçerik taşarsa kaydırma */
+            background-color: rgba(0,0,0,0.4); /* Yarı şeffaf siyah arka plan */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fff;
+            margin: auto;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-width: 90%;
+            width: 400px;
+            text-align: center;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close-button:hover,
+        .close-button:focus {
+            color: #000;
+            text-decoration: none;
+        }
+        .button-primary {
+            background-image: linear-gradient(to right, #6EE7B7, #34D399, #10B981);
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .button-primary:hover {
+            background-image: linear-gradient(to right, #34D399, #10B981, #059669);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+        }
+        .button-secondary {
+            background-color: #E2E8F0;
+            color: #4A5568;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .button-secondary:hover {
+            background-color: #CBD5E0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transform: translateY(-1px);
+        }
+        /* Yeni Onay Modalı Stilleri */
+        #confirm-modal .modal-content {
+            width: 500px;
+        }
+    </style>
 </head>
-<body>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="container bg-white p-8 rounded-xl shadow-lg flex flex-col items-center gap-6">
+        <h1 class="text-4xl font-bold text-gray-800 mb-4 text-center">İtalyanca-Türkçe Kelime Oyunu</h1>
 
-<h1>This is a Heading</h1>
-<p>This is a paragraph.</p>
+        <!-- Ana Menü / Mod Seçimi -->
+        <div id="main-menu" class="w-full flex flex-col items-center justify-center gap-6 p-6">
+            <button id="start-game-mode-button" class="button-primary px-10 py-5 text-white font-bold rounded-xl text-2xl w-full max-w-sm">Kelime Oyunu Oyna</button>
+            <button id="manage-words-mode-button" class="button-secondary px-10 py-5 text-gray-800 font-bold rounded-xl text-2xl w-full max-w-sm">Kelimeleri Yönet</button>
+        </div>
 
+        <!-- Kelime Oyunu Alanı -->
+        <div id="game-setup-section" class="w-full flex flex-col items-center justify-center gap-4 p-6 border-b border-gray-200 hidden">
+            <p class="text-xl font-semibold text-gray-700">Oyun Ayarları</p>
+            <div class="w-full max-w-xs mt-4">
+                <label for="num-words-input" class="block text-gray-700 text-sm font-bold mb-2">Kaç Kelime Sorulsun?</label>
+                <input type="number" id="num-words-input" value="20" min="1"
+                       class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-blue-500 text-center text-xl">
+                <p id="word-count-error" class="text-red-500 text-xs italic mt-1 hidden">Lütfen geçerli bir sayı girin.</p>
+            </div>
+
+            <div class="w-full max-w-xs mt-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">Oyun Yönü:</label>
+                <div class="flex justify-center gap-4">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="gameDirection" value="italiantoturkish" class="form-radio text-blue-600" checked>
+                        <span class="ml-2 text-gray-700 font-medium">İtalyanca -> Türkçe</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="gameDirection" value="turkishtoitalian" class="form-radio text-blue-600">
+                        <span class="ml-2 text-gray-700 font-medium">Türkçe -> İtalyanca</span>
+                    </label>
+                </div>
+            </div>
+
+            <button id="start-game-button" class="button-primary px-8 py-3 text-white font-bold rounded-xl text-xl mt-4 opacity-50 cursor-not-allowed" disabled>Oyunu Başlat</button>
+            <button id="back-to-main-from-game-setup" class="button-secondary px-6 py-2 text-gray-800 font-bold rounded-xl text-lg mt-2">Ana Menüye Dön</button>
+        </div>
+
+        <!-- Oyun Alanı -->
+        <div id="game-section" class="w-full flex flex-col items-center gap-6 p-6 hidden">
+            <div class="flex justify-between w-full text-lg font-medium text-gray-700">
+                <span id="word-counter">Kelime: Yükleniyor...</span>
+                <span id="score-display">Puan: 0</span>
+            </div>
+            <p id="question-word" class="text-6xl font-extrabold text-blue-600 my-8">Yükleniyor...</p>
+            <input type="text" id="user-guess" class="w-full p-4 text-center text-2xl border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500" placeholder="Karşılığını yazın" autocomplete="off">
+            <div class="flex gap-4 mt-4">
+                <button id="check-answer-button" class="button-primary px-8 py-4 text-white font-bold rounded-xl text-xl">Cevabı Kontrol Et</button>
+                <button id="next-word-button" class="button-secondary px-8 py-4 text-gray-800 font-bold rounded-xl text-xl hidden">Sonraki Kelime</button>
+            </div>
+            <p id="feedback-message" class="text-xl font-semibold mt-4 text-center min-h-[30px]"></p>
+        </div>
+
+        <!-- Kelime Yönetimi Alanı -->
+        <div id="manage-words-section" class="w-full flex flex-col items-center gap-6 p-6 hidden">
+            <h2 class="text-3xl font-bold text-gray-800 mb-4">Kelimeleri Yönet</h2>
+
+            <!-- Yeni Kelime Ekle -->
+            <div class="bg-blue-50 p-6 rounded-lg w-full max-w-md shadow-md">
+                <h3 class="text-2xl font-semibold text-gray-700 mb-4">Yeni Kelime Ekle</h3>
+                <input type="text" id="add-italian-word" placeholder="İtalyanca Kelime" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                <input type="text" id="add-turkish-word" placeholder="Türkçe Karşılığı" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+                <button id="add-word-button" class="button-primary w-full py-3 text-white font-bold rounded-lg">Kelime Ekle</button>
+            </div>
+
+            <!-- Google Drive'dan Kelime Aktar -->
+            <div class="bg-yellow-50 p-6 rounded-lg w-full max-w-md shadow-md mt-6">
+                <h3 class="text-2xl font-semibold text-gray-700 mb-4">Google Drive'dan Excel Tablosu Aktar</h3>
+                <p class="text-sm text-gray-600 mb-3">
+                    Lütfen Google Drive'ınızdaki Excel dosyasının (ilk satırda 'İtalyanca' ve 'Türkçe' sütun başlıkları olmalı) **herkese açık paylaşım linkini** buraya yapıştırın.
+                    <br><span class="font-bold text-red-600">ÖNEMLİ:</span> Bu özelliği yerel olarak kullanmak için HTML dosyasını bir web sunucusu (örn. Python'ın `http.server`) üzerinden çalıştırmalısınız. Doğrudan `file://` ile açmak çalışmayabilir.
+                </p>
+                <input type="text" id="drive-link-input" placeholder="Google Drive Excel Paylaşım Linki" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:shadow-outline focus:border-yellow-500">
+                <button id="import-drive-button" class="button-primary w-full py-3 text-white font-bold rounded-lg opacity-50 cursor-not-allowed" disabled>Drive'dan Aktar</button>
+                <p id="drive-import-status" class="text-sm mt-3 text-center"></p>
+            </div>
+
+            <!-- Mevcut Kelimeler -->
+            <div class="w-full bg-white p-6 rounded-lg shadow-md mt-6">
+                <h3 class="text-2xl font-semibold text-gray-700 mb-4">Mevcut Kelimeler (<span id="total-word-count">0</span>)</h3>
+                <div id="word-list-container" class="overflow-y-auto max-h-96 border border-gray-200 rounded-lg p-2">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50 sticky top-0">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">İtalyanca</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Türkçe</th>
+                                <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody id="words-table-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Kelimeler buraya JS ile yüklenecek -->
+                            <tr><td colspan="3" class="text-center py-4 text-gray-500">Henüz kelime yok. Yeni kelimeler ekleyin!</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <button id="back-to-main-from-manage" class="button-secondary px-6 py-2 text-gray-800 font-bold rounded-xl text-lg mt-4">Ana Menüye Dön</button>
+        </div>
+    </div>
+
+    <!-- Sonuç Modalı -->
+    <div id="result-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal('result-modal')">&times;</span>
+            <h2 class="text-3xl font-bold text-gray-800 mb-4">Oyun Bitti! 🎉</h2>
+            <p id="final-score" class="text-2xl font-semibold text-blue-700 mb-6"></p>
+            <div id="incorrect-words-list" class="text-left text-gray-700 mt-4 overflow-y-auto max-h-60 px-4"></div>
+            <button class="button-primary px-6 py-3 text-white font-bold rounded-xl text-lg mt-6" onclick="restartGame()">Tekrar Başla</button>
+        </div>
+    </div>
+
+    <!-- Hata Modalı -->
+    <div id="error-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal('error-modal')">&times;</span>
+            <h2 class="text-3xl font-bold text-red-600 mb-4">Hata! 🚨</h2>
+            <p id="error-message" class="text-lg text-gray-700 mb-6"></p>
+            <button class="button-secondary px-6 py-3 text-gray-800 font-bold rounded-xl text-lg" onclick="closeModal('error-modal')">Tamam</button>
+        </div>
+    </div>
+
+    <!-- Düzenleme Modalı -->
+    <div id="edit-word-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal('edit-word-modal')">&times;</span>
+            <h2 class="text-3xl font-bold text-gray-800 mb-4">Kelimeyi Düzenle</h2>
+            <input type="text" id="edit-italian-word" placeholder="İtalyanca Kelime" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+            <input type="text" id="edit-turkish-word" placeholder="Türkçe Karşılığı" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+            <button id="save-edit-button" class="button-primary w-full py-3 text-white font-bold rounded-lg">Kaydet</button>
+            <button class="button-secondary w-full py-3 text-gray-800 font-bold rounded-lg mt-2" onclick="closeModal('edit-word-modal')">İptal</button>
+        </div>
+    </div>
+
+    <!-- Onay Modalı (Silme İşlemi İçin) -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Onay Gerekli</h2>
+            <p id="confirm-message" class="text-lg text-gray-700 mb-6"></p>
+            <div class="flex justify-center gap-4">
+                <button id="confirm-yes-button" class="button-primary px-6 py-3 text-white font-bold rounded-lg">Evet</button>
+                <button id="confirm-no-button" class="button-secondary px-6 py-3 text-gray-800 font-bold rounded-lg">Hayır</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase ile ilgili tüm importlar kaldırıldı.
+        // Artık kelimeler sadece tarayıcı belleğinde tutulacak.
+
+        let allWords = []; // Tüm kelimeler burada saklanacak: [{id: "...", italian: "...", turkish: "..."}, ...]
+        let wordsToGuess = []; // Mevcut oyunda sorulacak kelimeler
+        let currentWordIndex = 0; // Mevcut kelimenin indeksi
+        let score = 0; // Oyuncunun puanı
+        let incorrectlyGuessedWords = []; // Yanlış bilinen kelimeler
+        let gameWordCount = 20; // Oyuncunun belirlediği kelime sayısı
+        let gameDirection = 'italiantoturkish'; // Oyun yönü
+        let currentEditingDocId = null; // Düzenlenmekte olan kelimenin ID'si
+        let confirmActionCallback = null; // Onay modalı için callback fonksiyonu
+
+        // Otomatik yüklenecek Google Drive Excel linki
+        const DEFAULT_DRIVE_LINK = "https://docs.google.com/spreadsheets/d/17W0tgLOeFQORTPoUXo1kHzl4NS0H8ID8/edit?usp=drivesdk&ouid=118347807987789973374&rtpof=true&sd=true";
+
+        // --- Modallar için Yardımcı Fonksiyonlar ---
+        function showModal(modalId) {
+            document.getElementById(modalId).style.display = 'flex';
+        }
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            if (modalId === 'edit-word-modal') {
+                currentEditingDocId = null;
+            }
+            if (modalId === 'confirm-modal') {
+                confirmActionCallback = null;
+            }
+        }
+        function displayError(message) {
+            const errorMessageDisplay = document.getElementById('error-message');
+            errorMessageDisplay.textContent = message;
+            showModal('error-modal');
+        }
+        function showConfirmModal(message, callback) {
+            const confirmMessage = document.getElementById('confirm-message');
+            confirmMessage.textContent = message;
+            confirmActionCallback = callback;
+            showModal('confirm-modal');
+        }
+
+        // UI Elementleri
+        const mainMenu = document.getElementById('main-menu');
+        const startGameModeButton = document.getElementById('start-game-mode-button');
+        const manageWordsModeButton = document.getElementById('manage-words-mode-button');
+        const gameSetupSection = document.getElementById('game-setup-section');
+        const manageWordsSection = document.getElementById('manage-words-section');
+        const backToMainFromGameSetup = document.getElementById('back-to-main-from-game-setup');
+        const backToMainFromManage = document.getElementById('back-to-main-from-manage');
+
+        const numWordsInput = document.getElementById('num-words-input');
+        const wordCountError = document.getElementById('word-count-error');
+        const gameDirectionRadios = document.querySelectorAll('input[name="gameDirection"]');
+        const startGameButton = document.getElementById('start-game-button');
+        const gameSection = document.getElementById('game-section');
+        const questionWordDisplay = document.getElementById('question-word');
+        const userGuessInput = document.getElementById('user-guess');
+        const checkAnswerButton = document.getElementById('check-answer-button');
+        const nextWordButton = document.getElementById('next-word-button');
+        const feedbackMessage = document.getElementById('feedback-message');
+        const wordCounter = document.getElementById('word-counter');
+        const scoreDisplay = document.getElementById('score-display');
+        const resultModal = document.getElementById('result-modal');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const incorrectWordsListDiv = document.getElementById('incorrect-words-list');
+        const errorModal = document.getElementById('error-modal');
+        const errorMessageDisplay = document.getElementById('error-message');
+
+        const addItalianWordInput = document.getElementById('add-italian-word');
+        const addTurkishWordInput = document.getElementById('add-turkish-word');
+        const addWordButton = document.getElementById('add-word-button');
+        const wordsTableBody = document.getElementById('words-table-body');
+        const totalWordCountSpan = document.getElementById('total-word-count');
+
+        const driveLinkInput = document.getElementById('drive-link-input');
+        const importDriveButton = document.getElementById('import-drive-button');
+        const driveImportStatus = document.getElementById('drive-import-status');
+
+        const editWordModal = document.getElementById('edit-word-modal');
+        const editItalianWordInput = document.getElementById('edit-italian-word');
+        const editTurkishWordInput = document.getElementById('edit-turkish-word');
+        const saveEditButton = document.getElementById('save-edit-button');
+
+        const confirmYesButton = document.getElementById('confirm-yes-button');
+        const confirmNoButton = document.getElementById('confirm-no-button');
+
+        confirmYesButton.addEventListener('click', () => {
+            if (confirmActionCallback) {
+                confirmActionCallback(true);
+            }
+            closeModal('confirm-modal');
+        });
+
+        confirmNoButton.addEventListener('click', () => {
+            if (confirmActionCallback) {
+                confirmActionCallback(false);
+            }
+            closeModal('confirm-modal');
+        });
+
+        // --- Ana Menü ve Mod Değişimi ---
+        startGameModeButton.addEventListener('click', () => {
+            mainMenu.classList.add('hidden');
+            gameSetupSection.classList.remove('hidden');
+            updateStartButtonState();
+        });
+
+        manageWordsModeButton.addEventListener('click', () => {
+            mainMenu.classList.add('hidden');
+            manageWordsSection.classList.remove('hidden');
+            renderWordsTable(); // Kelime yönetimi ekranına geçince tabloyu güncelle
+        });
+
+        backToMainFromGameSetup.addEventListener('click', () => {
+            gameSetupSection.classList.add('hidden');
+            mainMenu.classList.remove('hidden');
+        });
+
+        backToMainFromManage.addEventListener('click', () => {
+            manageWordsSection.classList.add('hidden');
+            mainMenu.classList.remove('hidden');
+        });
+
+        // --- Kelime Oyunu Ayarları ve Başlatma ---
+        numWordsInput.addEventListener('input', updateStartButtonState);
+        numWordsInput.addEventListener('blur', updateStartButtonState);
+
+        gameDirectionRadios.forEach(radio => {
+            radio.addEventListener('change', (event) => {
+                gameDirection = event.target.value;
+            });
+        });
+
+        function updateStartButtonState() {
+            const requestedCount = parseInt(numWordsInput.value, 10);
+            const isValidNumber = !isNaN(requestedCount) && requestedCount > 0;
+            const hasEnoughWords = allWords.length >= requestedCount;
+
+            if (isValidNumber && hasEnoughWords) {
+                startGameButton.disabled = false;
+                startGameButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                wordCountError.classList.add('hidden');
+            } else {
+                startGameButton.disabled = true;
+                startGameButton.classList.add('opacity-50', 'cursor-not-allowed');
+                if (!isValidNumber) {
+                    wordCountError.textContent = "Lütfen pozitif bir sayı girin.";
+                    wordCountError.classList.remove('hidden');
+                } else if (!hasEnoughWords && allWords.length > 0) {
+                    wordCountError.textContent = `En az ${requestedCount} kelimeye ihtiyacınız var. Yüklü: ${allWords.length}`;
+                    wordCountError.classList.remove('hidden');
+                } else if (allWords.length === 0) {
+                     wordCountError.textContent = "Bellekte kelime bulunamadı. Lütfen önce kelime ekleyin veya Drive'dan aktarın.";
+                     wordCountError.classList.remove('hidden');
+                }
+            }
+            if (!numWordsInput.value || numWordsInput.value.trim() === "") {
+                wordCountError.textContent = "Lütfen bir kelime sayısı girin.";
+                wordCountError.classList.remove('hidden');
+            }
+        }
+
+        startGameButton.addEventListener('click', () => {
+            const requestedCount = parseInt(numWordsInput.value, 10);
+            if (isNaN(requestedCount) || requestedCount <= 0 || requestedCount > allWords.length) {
+                displayError(`Lütfen geçerli bir kelime sayısı girin. (1 - ${allWords.length} arası)`);
+                return;
+            }
+            gameWordCount = requestedCount;
+
+            gameSetupSection.classList.add('hidden');
+            gameSection.classList.remove('hidden');
+            restartGame();
+        });
+
+        // --- Oyun Mantığı ---
+        function resetGameInternal() {
+            currentWordIndex = 0;
+            score = 0;
+            userGuessInput.value = '';
+            feedbackMessage.textContent = '';
+            checkAnswerButton.classList.remove('hidden');
+            nextWordButton.classList.add('hidden');
+            scoreDisplay.textContent = `Puan: 0`;
+            userGuessInput.disabled = false;
+        }
+
+        function restartGame() {
+            closeModal('result-modal');
+            resetGameInternal();
+            incorrectlyGuessedWords = [];
+            startGame();
+        }
+
+        function startGame() {
+            if (allWords.length < gameWordCount) {
+                displayError(`Oyunu başlatmak için yeterli kelime yok. En az ${gameWordCount} kelimeye ihtiyacınız var.`);
+                gameSection.classList.add('hidden');
+                gameSetupSection.classList.remove('hidden');
+                return;
+            }
+            const shuffledWords = [...allWords].sort(() => 0.5 - Math.random());
+            wordsToGuess = shuffledWords.slice(0, gameWordCount);
+
+            displayCurrentWord();
+        }
+
+        function displayCurrentWord() {
+            if (currentWordIndex < wordsToGuess.length) {
+                const word = wordsToGuess[currentWordIndex];
+                let questionText = "";
+                let placeholderText = "";
+
+                if (gameDirection === 'italiantoturkish') {
+                    questionText = word.italian;
+                    placeholderText = "Türkçe karşılığını yazın";
+                } else {
+                    questionText = word.turkish;
+                    placeholderText = "İtalyanca karşılığını yazın";
+                }
+
+                questionWordDisplay.textContent = questionText;
+                userGuessInput.placeholder = placeholderText;
+                userGuessInput.value = '';
+                feedbackMessage.textContent = '';
+                checkAnswerButton.classList.remove('hidden');
+                nextWordButton.classList.add('hidden');
+                userGuessInput.focus();
+                wordCounter.textContent = `Kelime: ${currentWordIndex + 1}/${gameWordCount}`;
+            } else {
+                endGame();
+            }
+        }
+
+        checkAnswerButton.addEventListener('click', () => {
+            const currentWord = wordsToGuess[currentWordIndex];
+            const guess = userGuessInput.value.trim();
+
+            if (!guess) {
+                feedbackMessage.textContent = "Lütfen bir tahminde bulunun!";
+                feedbackMessage.className = "text-xl font-semibold mt-4 text-yellow-600 min-h-[30px]";
+                return;
+            }
+
+            let correctAnswer = "";
+            let askedWord = "";
+            let isCorrect = false;
+
+            if (gameDirection === 'italiantoturkish') {
+                askedWord = currentWord.italian;
+                correctAnswer = currentWord.turkish;
+                isCorrect = guess.localeCompare(correctAnswer, 'tr-TR', { sensitivity: 'base' }) === 0;
+            } else {
+                askedWord = currentWord.turkish;
+                correctAnswer = currentWord.italian;
+                isCorrect = guess.localeCompare(correctAnswer, 'it-IT', { sensitivity: 'base' }) === 0;
+            }
+
+            if (isCorrect) {
+                feedbackMessage.textContent = "Doğru bildiniz! 🎉";
+                feedbackMessage.className = "text-xl font-semibold mt-4 text-green-600 min-h-[30px]";
+                score++;
+            } else {
+                feedbackMessage.textContent = `Yanlış! Doğru cevap: "${correctAnswer}"`;
+                feedbackMessage.className = "text-xl font-semibold mt-4 text-red-600 min-h-[30px]";
+                incorrectlyGuessedWords.push({
+                    asked: askedWord,
+                    correct: correctAnswer,
+                    userGuess: guess,
+                    direction: gameDirection
+                });
+            }
+            scoreDisplay.textContent = `Puan: ${score}`;
+            checkAnswerButton.classList.add('hidden');
+            nextWordButton.classList.remove('hidden');
+            userGuessInput.disabled = true;
+        });
+
+        nextWordButton.addEventListener('click', () => {
+            currentWordIndex++;
+            userGuessInput.disabled = false;
+            displayCurrentWord();
+        });
+
+        document.body.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                if (gameSection.classList.contains('hidden')) {
+                    const activeElement = document.activeElement;
+                    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'BUTTON')) {
+                         return;
+                    }
+                    return;
+                }
+
+                event.preventDefault();
+
+                if (!checkAnswerButton.classList.contains('hidden')) {
+                    checkAnswerButton.click();
+                } else if (!nextWordButton.classList.contains('hidden')) {
+                    nextWordButton.click();
+                }
+            }
+        });
+
+        function endGame() {
+            finalScoreDisplay.textContent = `Toplamda ${score} doğru cevap verdiniz!`;
+            incorrectWordsListDiv.innerHTML = '';
+
+            if (incorrectlyGuessedWords.length > 0) {
+                const title = document.createElement('h3');
+                title.className = 'text-xl font-semibold text-gray-800 mb-2 mt-4';
+                title.textContent = 'Yanlış Bildikleriniz:';
+                incorrectWordsListDiv.appendChild(title);
+
+                const ul = document.createElement('ul');
+                ul.className = 'list-disc list-inside text-left mx-auto max-w-xs';
+                incorrectlyGuessedWords.forEach(item => {
+                    const li = document.createElement('li');
+                    let askedLang = item.direction === 'italiantoturkish' ? "İtalyanca" : "Türkçe";
+                    let correctLang = item.direction === 'italiantoturkish' ? "Türkçe" : "İtalyanca";
+
+                    li.innerHTML = `<span class="font-medium">${askedLang}: "${item.asked}"</span><br> Doğru ${correctLang}: "<span class="text-green-600">${item.correct}</span>" (Sizin tahmininiz: "${item.userGuess}")`;
+                    ul.appendChild(li);
+                });
+                incorrectWordsListDiv.appendChild(ul);
+            } else {
+                const congrats = document.createElement('p');
+                congrats.className = 'text-lg text-green-700 mt-4';
+                congrats.textContent = 'Tebrikler! Tüm kelimeleri doğru bildiniz!';
+                incorrectWordsListDiv.appendChild(congrats);
+            }
+
+            showModal('result-modal');
+        }
+
+        // --- Kelime Yönetimi İşlemleri (Bellek Tabanlı) ---
+
+        // Kelime zaten mevcut mu kontrol eder (büyük/küçük harf duyarsız)
+        function isWordDuplicate(italian, turkish) {
+            return allWords.some(word =>
+                word.italian.toLowerCase() === italian.toLowerCase() &&
+                word.turkish.toLowerCase() === turkish.toLowerCase()
+            );
+        }
+
+        // Yeni kelime ekler
+        addWordButton.addEventListener('click', () => {
+            const italian = addItalianWordInput.value.trim();
+            const turkish = addTurkishWordInput.value.trim();
+
+            if (!italian || !turkish) {
+                displayError("Lütfen hem İtalyanca hem de Türkçe kelime girin.");
+                return;
+            }
+
+            if (isWordDuplicate(italian, turkish)) {
+                displayError(`"${italian} - ${turkish}" kelimesi zaten listede mevcut.`);
+                return;
+            }
+
+            // Yeni kelimeye benzersiz bir ID atıyoruz (şimdilik basit bir timestamp)
+            const newWord = {
+                id: Date.now().toString(), // Basit bir ID oluşturma
+                italian: italian,
+                turkish: turkish,
+                timestamp: new Date()
+            };
+            allWords.push(newWord);
+            renderWordsTable(); // Tabloyu güncelle
+            updateStartButtonState(); // Oyun başlatma butonunu güncelle
+            addItalianWordInput.value = '';
+            addTurkishWordInput.value = '';
+            console.log("Kelime başarıyla eklendi (belleğe)!");
+        });
+
+        // Kelime listesini tabloya render eder
+        function renderWordsTable() {
+            wordsTableBody.innerHTML = '';
+            totalWordCountSpan.textContent = allWords.length;
+
+            if (allWords.length === 0) {
+                wordsTableBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500">Henüz kelime yok. Yeni kelimeler ekleyin veya Drive\'dan aktarın!</td></tr>';
+                return;
+            }
+
+            allWords.forEach(word => {
+                const row = wordsTableBody.insertRow();
+                row.className = 'hover:bg-gray-100';
+
+                const italianCell = row.insertCell();
+                italianCell.className = 'px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900';
+                italianCell.textContent = word.italian;
+
+                const turkishCell = row.insertCell();
+                turkishCell.className = 'px-3 py-2 whitespace-nowrap text-sm text-gray-500';
+                turkishCell.textContent = word.turkish;
+
+                const actionsCell = row.insertCell();
+                actionsCell.className = 'px-3 py-2 whitespace-nowrap text-right text-sm font-medium';
+
+                const editButton = document.createElement('button');
+                editButton.textContent = 'Düzenle';
+                editButton.className = 'text-blue-600 hover:text-blue-900 mr-3';
+                editButton.onclick = () => openEditModal(word);
+                actionsCell.appendChild(editButton);
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Sil';
+                deleteButton.className = 'text-red-600 hover:text-red-900';
+                deleteButton.onclick = () => showConfirmModal(`"${word.italian}" kelimesini silmek istediğinizden emin misiniz?`, (confirmed) => {
+                    if (confirmed) {
+                        deleteWord(word.id);
+                    }
+                });
+                actionsCell.appendChild(deleteButton);
+            });
+        }
+
+        // Düzenleme modalını açar ve mevcut kelime verilerini yükler
+        function openEditModal(word) {
+            currentEditingDocId = word.id;
+            editItalianWordInput.value = word.italian;
+            editTurkishWordInput.value = word.turkish;
+            showModal('edit-word-modal');
+        }
+
+        // Kelimeyi günceller (düzenleme modalından)
+        saveEditButton.addEventListener('click', () => {
+            const italian = editItalianWordInput.value.trim();
+            const turkish = editTurkishWordInput.value.trim();
+
+            if (!italian || !turkish) {
+                displayError("Lütfen hem İtalyanca hem de Türkçe kelime girin.");
+                return;
+            }
+            if (!currentEditingDocId) {
+                displayError("Düzenlenecek kelime bulunamadı. Lütfen tekrar deneyin.");
+                return;
+            }
+
+            // Güncelleme yapmadan önce, yeni değerlerin başka bir kelimeyle çakışıp çakışmadığını kontrol et
+            const existingWord = allWords.find(word => word.id === currentEditingDocId);
+            if (existingWord && (existingWord.italian.toLowerCase() !== italian.toLowerCase() || existingWord.turkish.toLowerCase() !== turkish.toLowerCase())) {
+                if (isWordDuplicate(italian, turkish)) {
+                    displayError(`"${italian} - ${turkish}" kelimesi zaten listede mevcut.`);
+                    return;
+                }
+            }
+
+
+            // allWords dizisindeki kelimeyi bul ve güncelle
+            const wordIndex = allWords.findIndex(word => word.id === currentEditingDocId);
+            if (wordIndex > -1) {
+                allWords[wordIndex].italian = italian;
+                allWords[wordIndex].turkish = turkish;
+                renderWordsTable(); // Tabloyu güncelle
+                updateStartButtonState(); // Oyun başlatma butonunu güncelle
+                console.log("Kelime başarıyla güncellendi (bellekte)!");
+                closeModal('edit-word-modal');
+            } else {
+                displayError("Kelime bulunamadı veya güncellenemedi.");
+            }
+        });
+
+        // Kelimeyi siler
+        function deleteWord(id) {
+            allWords = allWords.filter(word => word.id !== id);
+            renderWordsTable(); // Tabloyu güncelle
+            updateStartButtonState(); // Oyun başlatma butonunu güncelle
+            console.log("Kelime başarıyla silindi (bellekten)!");
+        }
+
+        // --- Google Drive'dan Kelime Aktarma ---
+        driveLinkInput.addEventListener('input', () => {
+            const link = driveLinkInput.value.trim();
+            if (link) {
+                importDriveButton.disabled = false;
+                importDriveButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                importDriveButton.disabled = true;
+                importDriveButton.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+            driveImportStatus.textContent = ''; // Durum mesajını temizle
+        });
+
+        importDriveButton.addEventListener('click', async () => {
+            const link = driveLinkInput.value.trim();
+            if (!link) {
+                displayError("Lütfen bir Google Drive linki girin.");
+                return;
+            }
+            await fetchExcelFromDriveLink(link, driveImportStatus); // Manuel aktarım için status elementini gönder
+        });
+
+        function extractFileIdFromDriveLink(link) {
+            const regex = /(?:https?:\/\/)?(?:www\.)?(?:drive\.google\.com\/(?:file\/d\/|open\?id=|folderview\?id=)|docs\.google\.com\/spreadsheets\/d\/)([a-zA-Z0-9_-]+)/;
+            const match = link.match(regex);
+            if (match && match[1]) {
+                return match[1];
+            }
+            return null;
+        }
+
+        async function fetchExcelFromDriveLink(link, statusElement) {
+            if (statusElement) {
+                statusElement.className = 'text-sm mt-3 text-gray-600';
+                statusElement.textContent = 'Drive linki işleniyor...';
+            }
+
+            const fileId = extractFileIdFromDriveLink(link);
+            if (!fileId) {
+                if (statusElement) {
+                    statusElement.className = 'text-sm mt-3 text-red-600';
+                    statusElement.textContent = "Geçersiz Google Drive linki. Lütfen dosya ID'sinin olduğu bir link girin.";
+                } else {
+                    displayError("Geçersiz Google Drive linki. Lütfen dosya ID'sinin olduğu bir link girin.");
+                }
+                return;
+            }
+
+            const downloadUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=xlsx`;
+
+            try {
+                if (statusElement) {
+                    statusElement.textContent = 'Excel dosyası indiriliyor...';
+                }
+                const response = await fetch(downloadUrl);
+
+                if (!response.ok) {
+                    let errorMsg = `HTTP hata kodu: ${response.status}. Dosya bulunamadı veya erişim reddedildi.`;
+                    if (response.status === 403 || response.status === 401) {
+                         errorMsg += " Dosyanın Google Drive'da 'Bağlantıya sahip olan herkes' ile 'Görüntüleyici' olarak paylaşıldığından emin olun.";
+                    } else if (response.status === 0) {
+                        errorMsg += " Bu genellikle tarayıcının güvenlik kısıtlamalarından (CORS) kaynaklanır. Lütfen HTML dosyasını yerel bir web sunucusu (örn. Python'ın `http.server`) üzerinden çalıştırın.";
+                    }
+                    throw new Error(errorMsg);
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+                if (statusElement) {
+                    statusElement.textContent = 'Excel dosyası okunuyor...';
+                }
+
+                const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+
+                const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                if (sheetData.length === 0) {
+                    if (statusElement) {
+                        statusElement.className = 'text-sm mt-3 text-red-600';
+                        statusElement.textContent = "Drive Excel dosyasında okunabilir veri bulunamadı.";
+                    } else {
+                        displayError("Drive Excel dosyasında okunabilir veri bulunamadı.");
+                    }
+                    return;
+                }
+
+                const headers = sheetData[0].map(h => String(h).replace(/\s+/g, '').toLowerCase());
+                const italianColIndex = headers.indexOf('italyanca');
+                const turkishColIndex = headers.indexOf('türkçe');
+
+                if (italianColIndex === -1 || turkishColIndex === -1) {
+                    if (statusElement) {
+                        statusElement.className = 'text-sm mt-3 text-red-600';
+                        statusElement.textContent = "Drive Excel dosyasında 'İtalyanca' ve 'Türkçe' başlıklı sütunlar bulunamadı.";
+                    } else {
+                        displayError("Drive Excel dosyasında 'İtalyanca' ve 'Türkçe' başlıklı sütunlar bulunamadı.");
+                    }
+                    return;
+                }
+
+                const wordsToImport = [];
+                let duplicatesFound = 0;
+                for (let i = 1; i < sheetData.length; i++) {
+                    const row = sheetData[i];
+                    const italian = row[italianColIndex];
+                    const turkish = row[turkishColIndex];
+
+                    if (italian && turkish) {
+                        const trimmedItalian = String(italian).trim();
+                        const trimmedTurkish = String(turkish).trim();
+                        if (isWordDuplicate(trimmedItalian, trimmedTurkish)) {
+                            duplicatesFound++;
+                            console.warn(`Tekrarlayan kelime atlandı: ${trimmedItalian} - ${trimmedTurkish}`);
+                        } else {
+                            wordsToImport.push({
+                                id: Date.now().toString() + "_" + i, // Benzersiz ID oluştur
+                                italian: trimmedItalian,
+                                turkish: trimmedTurkish
+                            });
+                        }
+                    }
+                }
+
+                if (wordsToImport.length === 0 && duplicatesFound === sheetData.length - 1) { // Sadece başlık varsa veya hepsi tekrar ise
+                    if (statusElement) {
+                        statusElement.className = 'text-sm mt-3 text-orange-600';
+                        statusElement.textContent = "Drive Excel dosyasında eklenecek geçerli veya yeni kelime bulunamadı.";
+                    } else {
+                        displayError("Drive Excel dosyasında eklenecek geçerli veya yeni kelime bulunamadı.");
+                    }
+                    return;
+                }
+
+                allWords = allWords.concat(wordsToImport);
+                renderWordsTable();
+                updateStartButtonState();
+
+                let successMessage = `${wordsToImport.length} kelime başarıyla eklendi!`;
+                if (duplicatesFound > 0) {
+                    successMessage += ` (${duplicatesFound} tekrar eden kelime atlandı.)`;
+                }
+
+                if (statusElement) {
+                    statusElement.className = 'text-sm mt-3 text-green-600';
+                    statusElement.textContent = successMessage;
+                }
+
+                driveLinkInput.value = '';
+                importDriveButton.disabled = true;
+                importDriveButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+            } catch (error) {
+                console.error("Drive'dan Excel okunurken hata:", error);
+                if (statusElement) {
+                    statusElement.className = 'text-sm mt-3 text-red-600';
+                    statusElement.textContent = "Drive'dan dosya alınırken bir hata oluştu: " + error.message;
+                } else {
+                    displayError("Drive'dan dosya alınırken bir hata oluştu: " + error.message);
+                }
+            }
+        }
+
+        // Sayfa yüklendiğinde başlangıç durumunu ayarla
+        document.addEventListener('DOMContentLoaded', () => {
+            wordsTableBody.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500">Kelimeler yükleniyor...</td></tr>';
+            totalWordCountSpan.textContent = '0';
+            renderWordsTable();
+            updateStartButtonState();
+
+            // Sayfa yüklendiğinde varsayılan Drive linkinden kelimeleri çek
+            // Hata mesajını doğrudan ilgili alana göndermek için driveImportStatus elementini de gönderiyoruz.
+            fetchExcelFromDriveLink(DEFAULT_DRIVE_LINK, driveImportStatus);
+        });
+    </script>
 </body>
 </html>
