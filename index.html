@@ -95,7 +95,12 @@
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
-    <div class="container bg-white p-8 rounded-xl shadow-lg flex flex-col items-center gap-6">
+    <div class="container bg-white p-8 rounded-xl shadow-lg flex flex-col items-center gap-6 relative">
+        <!-- Her zaman görünür Ana Menü butonu -->
+        <button id="back-to-main-always" class="absolute top-4 left-4 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg text-sm shadow-md transition duration-200 ease-in-out z-50">
+            Ana Menü
+        </button>
+
         <h1 class="text-4xl font-bold text-gray-800 mb-4 text-center">İtalyanca-Türkçe Kelime Oyunu</h1>
 
         <!-- Ana Menü / Mod Seçimi -->
@@ -164,7 +169,7 @@
                 <h3 class="text-2xl font-semibold text-gray-700 mb-4">Google Drive'dan Excel Tablosu Aktar</h3>
                 <p class="text-sm text-gray-600 mb-3">
                     Lütfen Google Drive'ınızdaki Excel dosyasının (ilk satırda 'İtalyanca' ve 'Türkçe' sütun başlıkları olmalı) **herkese açık paylaşım linkini** buraya yapıştırın.
-                    <br><span class="font-bold text-red-600">ÖNEMLİ:</span> Bu özelliği yerel olarak kullanmak için HTML dosyasını bir web sunucusu (örn. Python'ın `http.server`) üzerinden çalıştırmalısınız. Doğrudan `file://` ile açmak çalışmayabilir.
+                    <br><span class="font-bold text-red-600">ÖNEMLİ:</span> Bu özelliği yerel olarak kullanmak için HTML dosyasını bir web sunucusu (örn. Python'ın `http.server` veya VS Code Live Server) üzerinden çalıştırmalısınız. Doğrudan `file://` ile açmak **çalışmayacaktır**. Ayrıca Drive dosyanızın "Bağlantıya sahip olan herkes" ile "Görüntüleyici" olarak paylaşıldığından emin olun.
                 </p>
                 <input type="text" id="drive-link-input" placeholder="Google Drive Excel Paylaşım Linki" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:shadow-outline focus:border-yellow-500">
                 <button id="import-drive-button" class="button-primary w-full py-3 text-white font-bold rounded-lg opacity-50 cursor-not-allowed" disabled>Drive'dan Aktar</button>
@@ -197,33 +202,33 @@
     <!-- Sonuç Modalı -->
     <div id="result-modal" class="modal">
         <div class="modal-content">
-            <span class="close-button" onclick="closeModal('result-modal')">&times;</span>
+            <span class="close-button" onclick="window.closeModal('result-modal')">&times;</span>
             <h2 class="text-3xl font-bold text-gray-800 mb-4">Oyun Bitti! 🎉</h2>
             <p id="final-score" class="text-2xl font-semibold text-blue-700 mb-6"></p>
             <div id="incorrect-words-list" class="text-left text-gray-700 mt-4 overflow-y-auto max-h-60 px-4"></div>
-            <button class="button-primary px-6 py-3 text-white font-bold rounded-xl text-lg mt-6" onclick="restartGame()">Tekrar Başla</button>
+            <button class="button-primary px-6 py-3 text-white font-bold rounded-xl text-lg mt-6" onclick="window.restartGame()">Tekrar Başla</button>
         </div>
     </div>
 
     <!-- Hata Modalı -->
     <div id="error-modal" class="modal">
         <div class="modal-content">
-            <span class="close-button" onclick="closeModal('error-modal')">&times;</span>
+            <span class="close-button" onclick="window.closeModal('error-modal')">&times;</span>
             <h2 class="text-3xl font-bold text-red-600 mb-4">Hata! 🚨</h2>
             <p id="error-message" class="text-lg text-gray-700 mb-6"></p>
-            <button class="button-secondary px-6 py-3 text-gray-800 font-bold rounded-xl text-lg" onclick="closeModal('error-modal')">Tamam</button>
+            <button class="button-secondary px-6 py-3 text-gray-800 font-bold rounded-xl text-lg" onclick="window.closeModal('error-modal')">Tamam</button>
         </div>
     </div>
 
     <!-- Düzenleme Modalı -->
     <div id="edit-word-modal" class="modal">
         <div class="modal-content">
-            <span class="close-button" onclick="closeModal('edit-word-modal')">&times;</span>
+            <span class="close-button" onclick="window.closeModal('edit-word-modal')">&times;</span>
             <h2 class="text-3xl font-bold text-gray-800 mb-4">Kelimeyi Düzenle</h2>
             <input type="text" id="edit-italian-word" placeholder="İtalyanca Kelime" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
             <input type="text" id="edit-turkish-word" placeholder="Türkçe Karşılığı" class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
             <button id="save-edit-button" class="button-primary w-full py-3 text-white font-bold rounded-lg">Kaydet</button>
-            <button class="button-secondary w-full py-3 text-gray-800 font-bold rounded-lg mt-2" onclick="closeModal('edit-word-modal')">İptal</button>
+            <button class="button-secondary w-full py-3 text-gray-800 font-bold rounded-lg mt-2" onclick="window.closeModal('edit-word-modal')">İptal</button>
         </div>
     </div>
 
@@ -253,14 +258,17 @@
         let currentEditingDocId = null; // Düzenlenmekte olan kelimenin ID'si
         let confirmActionCallback = null; // Onay modalı için callback fonksiyonu
 
-        // Otomatik yüklenecek Google Drive Excel linki
-        const DEFAULT_DRIVE_LINK = "https://docs.google.com/spreadsheets/d/17W0tgLOeFQORTPoUXo1kHzl4NS0H8ID8/edit?usp=drivesdk&ouid=118347807987789973374&rtpof=true&sd=true";
+        // Otomatik yüklenecek Google Drive Excel linki (doğrudan export formatı tercih edilir)
+        // Bu linkin Google Drive'da "Bağlantıya sahip olan herkes" ile "Görüntüleyici" olarak paylaşıldığından emin olun.
+        const DEFAULT_DRIVE_LINK = "https://docs.google.com/spreadsheets/d/17W0tgLOeFQORTPoUXo1kHzl4NS0H8ID8/export?format=xlsx";
 
         // --- Modallar için Yardımcı Fonksiyonlar ---
-        function showModal(modalId) {
+        // Bu fonksiyonlar HTML'deki onclick olaylarından çağrıldığı için global erişilebilir olmalıdır.
+        // window objesine atanarak global erişim sağlanır.
+        window.showModal = function(modalId) {
             document.getElementById(modalId).style.display = 'flex';
         }
-        function closeModal(modalId) {
+        window.closeModal = function(modalId) {
             document.getElementById(modalId).style.display = 'none';
             if (modalId === 'edit-word-modal') {
                 currentEditingDocId = null;
@@ -272,13 +280,13 @@
         function displayError(message) {
             const errorMessageDisplay = document.getElementById('error-message');
             errorMessageDisplay.textContent = message;
-            showModal('error-modal');
+            window.showModal('error-modal');
         }
         function showConfirmModal(message, callback) {
             const confirmMessage = document.getElementById('confirm-message');
             confirmMessage.textContent = message;
             confirmActionCallback = callback;
-            showModal('confirm-modal');
+            window.showModal('confirm-modal');
         }
 
         // UI Elementleri
@@ -289,6 +297,10 @@
         const manageWordsSection = document.getElementById('manage-words-section');
         const backToMainFromGameSetup = document.getElementById('back-to-main-from-game-setup');
         const backToMainFromManage = document.getElementById('back-to-main-from-manage');
+
+        // Yeni eklenen "Her zaman Ana Menüye Dön" butonu
+        const backToMainAlwaysButton = document.getElementById('back-to-main-always');
+
 
         const numWordsInput = document.getElementById('num-words-input');
         const wordCountError = document.getElementById('word-count-error');
@@ -330,14 +342,14 @@
             if (confirmActionCallback) {
                 confirmActionCallback(true);
             }
-            closeModal('confirm-modal');
+            window.closeModal('confirm-modal');
         });
 
         confirmNoButton.addEventListener('click', () => {
             if (confirmActionCallback) {
                 confirmActionCallback(false);
             }
-            closeModal('confirm-modal');
+            window.closeModal('confirm-modal');
         });
 
         // --- Ana Menü ve Mod Değişimi ---
@@ -362,6 +374,22 @@
             manageWordsSection.classList.add('hidden');
             mainMenu.classList.remove('hidden');
         });
+
+        // Yeni eklenen "Her zaman Ana Menüye Dön" butonunun işlevi
+        backToMainAlwaysButton.addEventListener('click', () => {
+            // Tüm bölümleri gizle
+            gameSetupSection.classList.add('hidden');
+            gameSection.classList.add('hidden');
+            manageWordsSection.classList.add('hidden');
+
+            // Ana menüyü göster
+            mainMenu.classList.remove('hidden');
+
+            // Oyun durumunu sıfırla
+            resetGameInternal();
+            incorrectlyGuessedWords = []; // Yanlış bilinen kelimeleri temizle
+        });
+
 
         // --- Kelime Oyunu Ayarları ve Başlatma ---
         numWordsInput.addEventListener('input', updateStartButtonState);
@@ -412,7 +440,7 @@
 
             gameSetupSection.classList.add('hidden');
             gameSection.classList.remove('hidden');
-            restartGame();
+            window.restartGame(); // Global olarak çağır
         });
 
         // --- Oyun Mantığı ---
@@ -427,14 +455,16 @@
             userGuessInput.disabled = false;
         }
 
-        function restartGame() {
-            closeModal('result-modal');
+        // Bu fonksiyon HTML'deki onclick olayından çağrıldığı için global erişilebilir olmalıdır.
+        window.restartGame = function() {
+            window.closeModal('result-modal');
             resetGameInternal();
             incorrectlyGuessedWords = [];
             startGame();
         }
 
         function startGame() {
+            console.log("startGame çağrıldı. allWords.length:", allWords.length, "gameWordCount:", gameWordCount); // Hata ayıklama için
             if (allWords.length < gameWordCount) {
                 displayError(`Oyunu başlatmak için yeterli kelime yok. En az ${gameWordCount} kelimeye ihtiyacınız var.`);
                 gameSection.classList.add('hidden');
@@ -572,7 +602,7 @@
                 incorrectWordsListDiv.appendChild(congrats);
             }
 
-            showModal('result-modal');
+            window.showModal('result-modal');
         }
 
         // --- Kelime Yönetimi İşlemleri (Bellek Tabanlı) ---
@@ -663,7 +693,7 @@
             currentEditingDocId = word.id;
             editItalianWordInput.value = word.italian;
             editTurkishWordInput.value = word.turkish;
-            showModal('edit-word-modal');
+            window.showModal('edit-word-modal');
         }
 
         // Kelimeyi günceller (düzenleme modalından)
@@ -698,7 +728,7 @@
                 renderWordsTable(); // Tabloyu güncelle
                 updateStartButtonState(); // Oyun başlatma butonunu güncelle
                 console.log("Kelime başarıyla güncellendi (bellekte)!");
-                closeModal('edit-word-modal');
+                window.closeModal('edit-word-modal');
             } else {
                 displayError("Kelime bulunamadı veya güncellenemedi.");
             }
@@ -735,6 +765,7 @@
         });
 
         function extractFileIdFromDriveLink(link) {
+            // Updated regex to support docs.google.com/spreadsheets/d/ links
             const regex = /(?:https?:\/\/)?(?:www\.)?(?:drive\.google\.com\/(?:file\/d\/|open\?id=|folderview\?id=)|docs\.google\.com\/spreadsheets\/d\/)([a-zA-Z0-9_-]+)/;
             const match = link.match(regex);
             if (match && match[1]) {
@@ -751,15 +782,17 @@
 
             const fileId = extractFileIdFromDriveLink(link);
             if (!fileId) {
+                const msg = "Geçersiz Google Drive linki. Lütfen dosya ID'sinin olduğu bir link girin. Google E-Tablolar için 'Dosya > Paylaş > Web'de Yayınla' seçeneğini kullanarak doğrudan indirme linki almayı deneyebilirsiniz.";
                 if (statusElement) {
                     statusElement.className = 'text-sm mt-3 text-red-600';
-                    statusElement.textContent = "Geçersiz Google Drive linki. Lütfen dosya ID'sinin olduğu bir link girin.";
+                    statusElement.textContent = msg;
                 } else {
-                    displayError("Geçersiz Google Drive linki. Lütfen dosya ID'sinin olduğu bir link girin.");
+                    displayError(msg);
                 }
                 return;
             }
 
+            // Google Sheets için doğrudan indirme URL'si (export formatı)
             const downloadUrl = `https://docs.google.com/spreadsheets/d/${fileId}/export?format=xlsx`;
 
             try {
@@ -772,7 +805,7 @@
                     let errorMsg = `HTTP hata kodu: ${response.status}. Dosya bulunamadı veya erişim reddedildi.`;
                     if (response.status === 403 || response.status === 401) {
                          errorMsg += " Dosyanın Google Drive'da 'Bağlantıya sahip olan herkes' ile 'Görüntüleyici' olarak paylaşıldığından emin olun.";
-                    } else if (response.status === 0) {
+                    } else if (response.status === 0) { // Genellikle CORS hatası
                         errorMsg += " Bu genellikle tarayıcının güvenlik kısıtlamalarından (CORS) kaynaklanır. Lütfen HTML dosyasını yerel bir web sunucusu (örn. Python'ın `http.server`) üzerinden çalıştırın.";
                     }
                     throw new Error(errorMsg);
@@ -780,7 +813,7 @@
 
                 const arrayBuffer = await response.arrayBuffer();
                 if (statusElement) {
-                    statusElement.textContent = 'Excel dosyası okunuyor...';
+                    statusElement.textContent = 'Excel dosyası okunuyor ve kelimeler işleniyor...';
                 }
 
                 const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
@@ -790,11 +823,12 @@
                 const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
                 if (sheetData.length === 0) {
+                    const msg = "Drive Excel dosyasında okunabilir veri bulunamadı.";
                     if (statusElement) {
                         statusElement.className = 'text-sm mt-3 text-red-600';
-                        statusElement.textContent = "Drive Excel dosyasında okunabilir veri bulunamadı.";
+                        statusElement.textContent = msg;
                     } else {
-                        displayError("Drive Excel dosyasında okunabilir veri bulunamadı.");
+                        displayError(msg);
                     }
                     return;
                 }
@@ -804,11 +838,12 @@
                 const turkishColIndex = headers.indexOf('türkçe');
 
                 if (italianColIndex === -1 || turkishColIndex === -1) {
+                    const msg = "Drive Excel dosyasında 'İtalyanca' ve 'Türkçe' başlıklı sütunlar bulunamadı. Lütfen Excel dosyanızın ilk satırında bu başlıkların olduğundan emin olun.";
                     if (statusElement) {
                         statusElement.className = 'text-sm mt-3 text-red-600';
-                        statusElement.textContent = "Drive Excel dosyasında 'İtalyanca' ve 'Türkçe' başlıklı sütunlar bulunamadı.";
+                        statusElement.textContent = msg;
                     } else {
-                        displayError("Drive Excel dosyasında 'İtalyanca' ve 'Türkçe' başlıklı sütunlar bulunamadı.");
+                        displayError(msg);
                     }
                     return;
                 }
@@ -837,11 +872,12 @@
                 }
 
                 if (wordsToImport.length === 0 && duplicatesFound === sheetData.length - 1) { // Sadece başlık varsa veya hepsi tekrar ise
+                    const msg = "Drive Excel dosyasında eklenecek geçerli veya yeni kelime bulunamadı.";
                     if (statusElement) {
                         statusElement.className = 'text-sm mt-3 text-orange-600';
-                        statusElement.textContent = "Drive Excel dosyasında eklenecek geçerli veya yeni kelime bulunamadı.";
+                        statusElement.textContent = msg;
                     } else {
-                        displayError("Drive Excel dosyasında eklenecek geçerli veya yeni kelime bulunamadı.");
+                        displayError(msg);
                     }
                     return;
                 }
@@ -866,11 +902,12 @@
 
             } catch (error) {
                 console.error("Drive'dan Excel okunurken hata:", error);
+                const msg = "Drive'dan dosya alınırken bir hata oluştu: " + error.message;
                 if (statusElement) {
                     statusElement.className = 'text-sm mt-3 text-red-600';
-                    statusElement.textContent = "Drive'dan dosya alınırken bir hata oluştu: " + error.message;
+                    statusElement.textContent = msg;
                 } else {
-                    displayError("Drive'dan dosya alınırken bir hata oluştu: " + error.message);
+                    displayError(msg);
                 }
             }
         }
